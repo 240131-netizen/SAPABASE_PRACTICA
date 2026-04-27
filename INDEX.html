@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Монитор статусов группы | Supabase</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: system-ui, 'Segoe UI', 'Inter', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(145deg, #f0f4fa 0%, #e6ecf3 100%);
+            min-height: 100vh;
+            padding: 2rem 1.5rem;
+        }
+
+        /* основной контейнер — две колонки на десктопе, стек на мобилках */
+        .dashboard {
+            max-width: 1300px;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem;
+            align-items: flex-start;
+        }
+
+        /* левая карточка (мой профиль + кнопки статусов) */
+        .profile-card {
+            flex: 1.2;
+            min-width: 260px;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(2px);
+            border-radius: 2rem;
+            box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.05);
+            padding: 1.8rem 1.5rem;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+
+        /* правая область (монитор группы) */
+        .monitor-card {
+            flex: 2.5;
+            min-width: 300px;
+            background: rgba(255, 255, 255, 0.96);
+            border-radius: 2rem;
+            box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.15);
+            padding: 1.8rem 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            transition: all 0.2s;
+        }
+
+        h2 {
+            font-size: 1.65rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #1f2b3c, #2c3e4e);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            letter-spacing: -0.3px;
+            margin-bottom: 0.35rem;
+            display: inline-block;
+        }
+
+        .section-sub {
+            font-size: 0.85rem;
+            color: #5b6e8c;
+            border-left: 3px solid #2c7da0;
+            padding-left: 10px;
+            margin-top: 4px;
+            margin-bottom: 1.4rem;
+        }
+
+        /* информация "Вы зашли как" */
+        .my-info-badge {
+            background: #eef2ff;
+            border-radius: 60px;
+            padding: 0.6rem 1rem;
+            margin-bottom: 1.8rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: #1f3a5f;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            border: 1px solid #cddfe7;
+            backdrop-filter: blur(2px);
+        }
+
+        .my-info-badge:before {
+            content: "👤";
+            font-size: 1.15rem;
+        }
+
+        /* сетка кнопок статусов */
+        .status-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 1.2rem 0 0.6rem;
+        }
+
+        .status-btn {
+            background: white;
+            border: 1px solid #cbdde9;
+            border-radius: 60px;
+            padding: 0.6rem 1.2rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            background: #fefefe;
+            color: #1f2e45;
+        }
+
+        .status-btn:hover {
+            transform: translateY(-2px);
+            background: #ffffff;
+            border-color: #2c7da0;
+            box-shadow: 0 8px 18px rgba(44, 125, 160, 0.15);
+        }
+
+        .status-btn:active {
+            transform: translateY(1px);
+        }
+
+        /* кастомные цвета для каждой кнопки (легкая подсказка) */
+        .status-btn[data-color="#3b82f6"]:hover { border-color: #3b82f6; background: #eff6ff; }
+        .status-btn[data-color="#d97706"]:hover { border-color: #d97706; background: #fffbeb; }
+        .status-btn[data-color="#10b981"]:hover { border-color: #10b981; background: #ecfdf5; }
+        .status-btn[data-color="#8b5cf6"]:hover { border-color: #8b5cf6; background: #f5f3ff; }
+
+        /* монитор: список участников */
+        .group-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 60vh;
+            overflow-y: auto;
+            padding-right: 6px;
+            margin-top: 1rem;
+        }
+
+        .user-item {
+            background: #ffffff;
+            border-radius: 1.5rem;
+            padding: 1rem 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: all 0.2s;
+            border: 1px solid #e2edf2;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
+        }
+
+        .user-item:hover {
+            background: #fafdff;
+            border-color: #bfd9e6;
+            transform: translateX(3px);
+        }
+
+        /* индикатор статуса — цветной кружок */
+        .status-dot {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #adb7c4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.05), 0 2px 5px rgba(0,0,0,0.1);
+            transition: 0.1s;
+            flex-shrink: 0;
+        }
+
+        /* если хотим внутри точек эмодзи — опционально (но оставим чистый цвет) */
+        .user-info {
+            flex-grow: 1;
+        }
+
+        .user-name {
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: #1c2b3e;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .user-status-text {
+            font-size: 0.8rem;
+            color: #4f6f8f;
+            background: #f0f4f9;
+            display: inline-block;
+            padding: 0.2rem 0.7rem;
+            border-radius: 30px;
+            margin-top: 6px;
+        }
+
+        .online-badge {
+            font-size: 0.7rem;
+            background: #e9f3e6;
+            color: #2e7d32;
+            border-radius: 30px;
+            padding: 0.15rem 0.6rem;
+            font-weight: normal;
+        }
+
+        .footer-note {
+            font-size: 0.7rem;
+            text-align: center;
+            margin-top: 1.5rem;
+            color: #6c86a3;
+            border-top: 1px solid #dee9f0;
+            padding-top: 1rem;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e2e9f0;
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #b9cfdf;
+            border-radius: 8px;
+        }
+
+        @media (max-width: 750px) {
+            body {
+                padding: 1rem;
+            }
+            .profile-card, .monitor-card {
+                padding: 1.2rem;
+            }
+            .status-btn {
+                padding: 0.45rem 1rem;
+                font-size: 0.8rem;
+            }
+        }
+
+        /* анимация загрузки */
+        .loading-skeleton {
+            background: #eef2f5;
+            border-radius: 1rem;
+            height: 70px;
+            margin-bottom: 10px;
+            animation: pulse 1.2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 0.8; }
+            100% { opacity: 0.5; }
+        }
+        .error-toast {
+            background: #fce4e4;
+            border-left: 5px solid #e53e3e;
+            padding: 0.6rem 1rem;
+            border-radius: 14px;
+            margin-bottom: 1rem;
+            font-size: 0.8rem;
+            color: #9b2c2c;
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+    <!-- ЛЕВАЯ КАРТОЧКА: профиль и смена статуса -->
+    <div class="profile-card">
+        <h2>📋 Мой профиль</h2>
+        <div class="section-sub">Измени свой статус — группа увидит</div>
+        
+        <div id="myInfo" class="my-info-badge">
+            Загрузка информации...
+        </div>
+
+        <div style="margin: 0.5rem 0 0.2rem 0; font-weight: 500; color: #2c4c6e;">⚡ Выбери состояние:</div>
+        <div class="status-buttons">
+            <button class="status-btn" data-status="📚 Учусь" data-color="#3b82f6">📚 Учусь</button>
+            <button class="status-btn" data-status="☕ Кофе" data-color="#d97706">☕ Кофе</button>
+            <button class="status-btn" data-status="🎮 В игре" data-color="#10b981">🎮 В игре</button>
+            <button class="status-btn" data-status="🏠 Дома" data-color="#8b5cf6">🏠 Дома</button>
+        </div>
+        <div class="footer-note" style="margin-top: 1.2rem;">
+            💡 Статус обновляется мгновенно<br>Группа видит изменения в реальном времени
+        </div>
+    </div>
+
+    <!-- ПРАВАЯ КАРТОЧКА: монитор группы -->
+    <div class="monitor-card">
+        <h2>👥 Монитор группы</h2>
+        <div class="section-sub">Активные участники и их статусы (обновление каждые 5 сек)</div>
+        
+        <div id="groupList" class="group-list">
+            <div class="loading-skeleton"></div>
+            <div class="loading-skeleton"></div>
+        </div>
+        <div class="footer-note">
+            🔄 Данные синхронизируются с сервером
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    // -------- ПОДСТАВЬТЕ СВОИ КЛЮЧИ (если нужно поменять - здесь) --------
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+    const URL = 'https://ofqryeutzazbmqwjfqzy.supabase.co/rest/v1/';
+    const KEY = 'sb_publishable_5dStFrIg8TP9CJdmh2wICA_rBkWHYTz';
+    const supabase = createClient(URL, KEY);
+
+    // Уникальный идентификатор текущего пользователя (ваш ID из таблицы profiles)
+    const MY_ID = '40018dfa-462d-466c-91b0-6689a81a350a';
+    
+    // Функция для изменения статуса (глобально доступна на случай onclick, но мы навесим обработчики)
+    window.changeStatus = async (statusText, colorHex) => {
+        try {
+            // Обновляем в таблице profiles поля status и color
+            const { error } = await supabase
+                .from('profiles')
+                .update({ status: statusText, color: colorHex })
+                .eq('id', MY_ID);
+
+            if (error) {
+                console.error("Ошибка обновления:", error);
+                showTemporaryMessage("Ошибка! Проверьте RLS политики в Supabase.", true);
+            } else {
+                // После успешного обновления сразу подтягиваем свежий список группы
+                await fetchGroup();
+                // Маленький визуальный фидбек
+                showTemporaryMessage(`✅ Статус изменён на: ${statusText}`, false);
+            }
+        } catch (err) {
+            console.error("Неизвестная ошибка:", err);
+            showTemporaryMessage("Сетевая ошибка, попробуйте снова", true);
+        }
+    };
+
+    // Небольшой тост/уведомление (ненавязчивое)
+    let toastTimeout = null;
+    function showTemporaryMessage(msg, isError) {
+        const monitorDiv = document.querySelector('.monitor-card');
+        let toastDiv = document.getElementById('dynamicToast');
+        if(!toastDiv) {
+            toastDiv = document.createElement('div');
+            toastDiv.id = 'dynamicToast';
+            toastDiv.style.cssText = `position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1f2a3e; color: white; padding: 8px 18px; border-radius: 60px; font-size: 0.85rem; z-index: 1000; backdrop-filter: blur(8px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: opacity 0.2s; pointer-events: none;`;
+            document.body.appendChild(toastDiv);
+        }
+        if(isError) {
+            toastDiv.style.background = "#c72a2a";
+            toastDiv.style.color = "white";
+        } else {
+            toastDiv.style.background = "#1f5e3a";
+            toastDiv.style.color = "#f0fff0";
+        }
+        toastDiv.textContent = msg;
+        toastDiv.style.opacity = "1";
+        if(toastTimeout) clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            toastDiv.style.opacity = "0";
+        }, 2500);
+    }
+
+    // Основная функция загрузки всех пользователей из таблицы profiles
+    async function fetchGroup() {
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .order('username', { ascending: true });
+
+            if (error) {
+                console.error("Ошибка получения данных:", error);
+                const groupContainer = document.getElementById('groupList');
+                if(groupContainer) {
+                    groupContainer.innerHTML = `<div class="error-toast">⚠️ Не удалось загрузить список. Проверьте подключение или RLS.</div>`;
+                }
+                return;
+            }
+
+            if (!data || data.length === 0) {
+                document.getElementById('groupList').innerHTML = `<div class="error-toast">👀 Пользователи не найдены. Добавьте записи в таблицу profiles.</div>`;
+                // все равно обновим информацию о себе
+                updateMyInfo(null);
+                return;
+            }
+
+            // Отрисовка списка участников (монитор группы)
+            renderGroupList(data);
+            
+            // Обновляем информацию о текущем пользователе (имя, статус)
+            const currentUser = data.find(user => user.id === MY_ID);
+            updateMyInfo(currentUser);
+            
+        } catch (err) {
+            console.error("fetchGroup критическая ошибка:", err);
+            document.getElementById('groupList').innerHTML = `<div class="error-toast">❌ Ошибка соединения с Supabase</div>`;
+        }
+    }
+
+    // Рендер списка группы с цветными точками и статусами
+    function renderGroupList(users) {
+        const container = document.getElementById('groupList');
+        if (!container) return;
+        
+        if (!users.length) {
+            container.innerHTML = `<div class="error-toast">Нет участников в группе</div>`;
+            return;
+        }
+        
+        const html = users.map(user => {
+            // Безопасное получение статуса и цвета
+            const statusText = user.status && user.status.trim() !== '' ? user.status : 'Статус не задан';
+            const dotColor = user.color && user.color.startsWith('#') ? user.color : '#9aaebf';
+            // Иконка по умолчанию для разнообразия, но точка будет залита цветом
+            // Дополнительно добавим маленькую эмодзи если статус содержит ключевые слова (необязательно)
+            let statusEmoji = '';
+            if (statusText.includes('Учусь')) statusEmoji = '📖';
+            else if (statusText.includes('Кофе')) statusEmoji = '☕';
+            else if (statusText.includes('игре')) statusEmoji = '🎮';
+            else if (statusText.includes('Дома')) statusEmoji = '🏠';
+            else statusEmoji = '💬';
+            
+            return `
+                <div class="user-item">
+                    <div class="status-dot" style="background: ${dotColor}; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
+                        ${statusEmoji}
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name">
+                            ${escapeHtml(user.username || 'Без имени')}
+                            ${user.id === MY_ID ? '<span class="online-badge" style="background:#d9efff; color:#0059b3;">Вы</span>' : ''}
+                        </div>
+                        <div class="user-status-text">
+                            ${escapeHtml(statusText)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        container.innerHTML = html;
+    }
+    
+    // простая защита от XSS
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+            return c;
+        });
+    }
+    
+    // Обновление блока "Вы зашли как: Имя"
+    function updateMyInfo(currentUser) {
+        const myInfoDiv = document.getElementById('myInfo');
+        if (!myInfoDiv) return;
+        
+        if (currentUser && currentUser.username) {
+            myInfoDiv.innerHTML = `🔹 Вы зашли как: <strong>${escapeHtml(currentUser.username)}</strong>  ${currentUser.status ? `· ${escapeHtml(currentUser.status)}` : ''}`;
+            // Дополнительно можно подсветить собственный статус
+        } else {
+            // если пользователь с таким id не найден в таблице profiles, но возможно он существует
+            myInfoDiv.innerHTML = `⚠️ Ваш профиль (ID: ${MY_ID.slice(0,8)}...) не найден в таблице. Добавьте запись вручную.`;
+        }
+    }
+    
+    // Привязываем обработчики к кнопкам статусов (динамически после загрузки DOM)
+    function bindStatusButtons() {
+        const buttons = document.querySelectorAll('.status-btn');
+        buttons.forEach(btn => {
+            // Удаляем старые обработчики, чтобы не дублировать
+            btn.removeEventListener('click', statusClickHandler);
+            btn.addEventListener('click', statusClickHandler);
+        });
+    }
+    
+    function statusClickHandler(event) {
+        const btn = event.currentTarget;
+        const statusText = btn.getAttribute('data-status');
+        const colorVal = btn.getAttribute('data-color');
+        if (statusText && colorVal) {
+            changeStatus(statusText, colorVal);
+        } else {
+            console.warn("Не хватает атрибутов у кнопки");
+        }
+    }
+    
+    // ---- Также обновляем статус в реальном времени через polling раз в 5 секунд ----
+    // ---- Запускаем первичную загрузку и интервал ----
+    
+    // автоматический перезапуск при ошибках подключения не ломает интервал
+    let intervalId = null;
+    
+    async function init() {
+        await fetchGroup();      // первая загрузка
+        bindStatusButtons();     // вешаем обработчики на кнопки
+        
+        if (intervalId) clearInterval(intervalId);
+        intervalId = setInterval(async () => {
+            await fetchGroup();
+            // при каждом обновлении списка кнопки могут быть пересозданы? нет, кнопки статичны, биндим повторно на всякий (безопасно)
+            bindStatusButtons();
+        }, 5000);
+    }
+    
+    // Дополнительно, когда страница полностью готова
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+    
+    // Небольшой фикс для случаев, если динамический контент перебивает кнопки - обработчики всё равно живы
+    // Также предусмотрим переподключение при потере фокуса, но не критично.
+    
+    // Экспортируем changeStatus в глобальный объект для возможного вызова из консоли (а также для кнопок)
+    window.changeStatus = changeStatus;
+    
+    // Если вдруг понадобится ручной рефреш - тоже глобально
+    window.refreshGroup = fetchGroup;
+    
+    console.log("✅ Монитор группы запущен. Supabase подключён, ID пользователя:", MY_ID);
+    
+    // Дополнительно: показать предупреждение, если таблица profiles не имеет поля color или status, но ошибки не будет.
+    // Чтобы стилизовать точку, даже если color == null, дефолтный цвет серый.
+</script>
+
+<!-- 
+    Важно!
+    Убедитесь, что в таблице "profiles" есть поля:
+    - id (UUID, primary key)
+    - username (text)
+    - status (text)
+    - color (text)  
+    
+    Также RLS политики должны разрешать:
+    - SELECT для аутентифицированных (или публичный доступ для чтения)
+    - UPDATE для строки с id = текущий пользователь (по MY_ID)
+    
+    Если вы используете этот код без авторизации, убедитесь что таблица публичная.
+    Либо добавьте анонимный ключ.
+    
+    При необходимости замените MY_ID на свой реальный UUID из таблицы profiles.
+-->
+</body>
+</html>
