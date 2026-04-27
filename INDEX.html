@@ -329,7 +329,7 @@
         try {
             // Обновляем в таблице profiles поля status и color
             const { error } = await supabase
-                .from('profiles')
+                .from('profile')
                 .update({ status: statusText, color: colorHex })
                 .eq('id', MY_ID);
 
@@ -378,7 +378,7 @@
     async function fetchGroup() {
         try {
             const { data, error } = await supabase
-                .from('profiles')
+                .from('profile')
                 .select('*')
                 .order('username', { ascending: true });
 
