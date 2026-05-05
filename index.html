@@ -373,35 +373,157 @@ document.getElementById('btn-logout').onclick = handleLogout;
 
 // --- ВАША ЛОГИКА (немного подправленная под MY_ID) ---
 
-window.changeStatus = async (statusText, colorHex) => {
-    if (!MY_ID) {
-        showTemporaryMessage("Сначала войдите через Google!", true);
-        return;
-    }
-    const { error } = await supabase
-        .from('profile')
-        .update({ status: statusText, color: colorHex })
-        .eq('id', MY_ID);
+// --- ТВОИ ОРИГИНАЛЬНЫЕ ФУНКЦИИ (ВОССТАНОВЛЕНО) ---
 
-    if (error) {
-        console.error("Ошибка:", error);
-        showTemporaryMessage("Ошибка RLS! Проверьте права доступа в Supabase.", true);
-    } else {
+    // Функция для изменения статуса
+    window.changeStatus = async (statusText, colorHex) => {
+        try {
+            if (!MY_ID) {
+                showTemporaryMessage("Сначала войдите через Google!", true);
+                return;
+            }
+            // Обновляем в таблице profiles поля status и color
+            const { error } = await supabase
+                .from('profile')
+                .update({ status: statusText, color: colorHex })
+                .eq('id', MY_ID);
+
+            if (error) {
+                console.error("Ошибка обновления:", error);
+                showTemporaryMessage("Ошибка! Проверьте RLS политики в Supabase.", true);
+            } else {
+                // После успешного обновления сразу подтягиваем свежий список группы
+                await fetchGroup();
+                // Маленький визуальный фидбек
+                showTemporaryMessage(`✅ Статус изменён на: ${statusText}`, false);
+            }
+        } catch (err) {
+            console.error("Неизвестная ошибка:", err);
+            showTemporaryMessage("Сетевая ошибка, попробуйте снова", true);
+        }
+    };
+
+    // Небольшой тост/уведомление (ненавязчивое)
+    let toastTimeout = null;
+    function showTemporaryMessage(msg, isError) {
+        let toastDiv = document.getElementById('dynamicToast');
+        if(!toastDiv) {
+            toastDiv = document.createElement('div');
+            toastDiv.id = 'dynamicToast';
+            toastDiv.style.cssText = `position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1f2a3e; color: white; padding: 8px 18px; border-radius: 60px; font-size: 0.85rem; z-index: 1000; backdrop-filter: blur(8px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: opacity 0.2s; pointer-events: none;`;
+            document.body.appendChild(toastDiv);
+        }
+        if(isError) {
+            toastDiv.style.background = "#c72a2a";
+            toastDiv.style.color = "white";
+        } else {
+            toastDiv.style.background = "#1f5e3a";
+            toastDiv.style.color = "#f0fff0";
+        }
+        toastDiv.textContent = msg;
+        toastDiv.style.opacity = "1";
+        if(toastTimeout) clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            toastDiv.style.opacity = "0";
+        }, 2500);
+    }
+
+    // Основная функция загрузки всех пользователей из таблицы profiles
+    async function fetchGroup() {
+        try {
+            const { data, error } = await supabase
+                .from('profile')
+                .select('*')
+                .order('username', { ascending: true });
+
+            if (error) {
+                console.error("Ошибка получения данных:", error);
+                const groupContainer = document.getElementById('groupList');
+                if(groupContainer) {
+                    groupContainer.innerHTML = `<div class="error-toast">⚠️ Не удалось загрузить список.</div>`;
+                }
+                return;
+            }
+
+            // Отрисовка списка участников
+            renderGroupList(data);
+            
+            // Обновляем информацию о текущем пользователе
+            const currentUser = data.find(user => user.id === MY_ID);
+            updateMyInfo(currentUser);
+            
+        } catch (err) {
+            console.error("fetchGroup критическая ошибка:", err);
+        }
+    }
+
+    // Рендер списка группы с цветными точками и статусами
+    function renderGroupList(users) {
+        const container = document.getElementById('groupList');
+        if (!container) return;
+        
+        const html = users.map(user => {
+            const statusText = user.status && user.status.trim() !== '' ? user.status : 'Статус не задан';
+            const dotColor = user.color && user.color.startsWith('#') ? user.color : '#9aaebf';
+            
+            let statusEmoji = '';
+            if (statusText.includes('Учусь')) statusEmoji = '📖';
+            else if (statusText.includes('Кофе')) statusEmoji = '☕';
+            else if (statusText.includes('игре')) statusEmoji = '🎮';
+            else if (statusText.includes('Дома')) statusEmoji = '🏠';
+            else statusEmoji = '💬';
+            
+            return `
+                <div class="user-item">
+                    <div class="status-dot" style="background: ${dotColor}; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
+                        ${statusEmoji}
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name">
+                            ${escapeHtml(user.username || 'Без имени')}
+                            ${user.id === MY_ID ? '<span class="online-badge" style="background:#d9efff; color:#0059b3;">Вы</span>' : ''}
+                        </div>
+                        <div class="user-status-text">
+                            ${escapeHtml(statusText)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        container.innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+    }
+
+    function updateMyInfo(currentUser) {
+        const myInfoDiv = document.getElementById('myInfo');
+        if (!myInfoDiv) return;
+        if (currentUser && currentUser.username) {
+            myInfoDiv.innerHTML = `🔹 Вы зашли как: <strong>${escapeHtml(currentUser.username)}</strong>`;
+        }
+    }
+
+    function bindStatusButtons() {
+        const buttons = document.querySelectorAll('.status-btn');
+        buttons.forEach(btn => {
+            btn.onclick = () => {
+                const statusText = btn.getAttribute('data-status');
+                const colorVal = btn.getAttribute('data-color');
+                changeStatus(statusText, colorVal);
+            };
+        });
+    }
+
+    async function init() {
         await fetchGroup();
-        showTemporaryMessage(`✅ Статус изменён`, false);
+        bindStatusButtons();
+        if (window.groupInterval) clearInterval(window.groupInterval);
+        window.groupInterval = setInterval(fetchGroup, 5000);
     }
-};
-
-// ... тут ваши функции fetchGroup, renderGroupList, showTemporaryMessage и т.д. ...
-// (Оставьте их как есть, они у вас написаны хорошо)
-
-async function init() {
-    await fetchGroup();
-    bindStatusButtons();
-    // Удаляем старый интервал если был, и ставим новый
-    if (window.groupInterval) clearInterval(window.groupInterval);
-    window.groupInterval = setInterval(fetchGroup, 5000);
-}
 
 // Вместо init() в конце вызываем checkUser()
 checkUser();
