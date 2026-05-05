@@ -518,14 +518,15 @@ document.getElementById('btn-logout').onclick = handleLogout;
         });
     }
 
-    async function init() {
+async function init() {
         await fetchGroup();
         bindStatusButtons();
         if (window.groupInterval) clearInterval(window.groupInterval);
         window.groupInterval = setInterval(fetchGroup, 5000);
-    }
+    } // <-- Добавили эту скобку
 
-// Вместо init() в конце вызываем checkUser()
-checkUser();
+    // Запускаем проверку пользователя
+    checkUser();
+</script> 
 </body>
 </html>
