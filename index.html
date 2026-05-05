@@ -338,6 +338,15 @@ async function handleLogin() {
         }
     });
 }
+    async function handleLogout() {
+    console.log("Выходим из системы...");
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+        console.error("Ошибка при выходе:", error.message);
+    }
+    // Перезагружаем страницу, чтобы сбросить интерфейс
+    window.location.reload();
+}
 
 // Проверка сессии при загрузке
 async function checkUser() {
