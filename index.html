@@ -341,26 +341,37 @@ async function handleLogin() {
 
 // Проверка сессии при загрузке
 async function checkUser() {
-    const { data: { session } } = await supabase.auth.getSession();
+    // 1. Получаем сессию
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (session) {
         const user = session.user;
-        MY_ID = user.id; // Получаем ID из Google аккаунта
+        MY_ID = user.id;
 
-        // Пытаемся создать профиль, если его еще нет в вашей таблице
-        await supabase.from('profile').upsert({
-            id: MY_ID,
-            username: user.user_metadata.full_name || user.email,
-        }, { onConflict: 'id' });
+        // 2. Пробуем сохранить профиль и ЛОГИРУЕМ результат
+        const { data, error: upsertError } = await supabase
+            .from('profile')
+            .upsert({
+                id: MY_ID,
+                username: user.user_metadata.full_name || user.email || 'User',
+            }, { onConflict: 'id' });
+
+        if (upsertError) {
+            // ВОТ ТУТ мы увидим реальную причину ошибки 500
+            console.error("Детальная ошибка базы данных:", upsertError.message);
+            console.error("Код ошибки:", upsertError.code);
+        } else {
+            console.log("Профиль успешно синхронизирован!");
+        }
 
         document.getElementById('btn-login').style.display = 'none';
         document.getElementById('btn-logout').style.display = 'inline-block';
-        
-        init(); // Запускаем ваш монитор
+        init(); 
     } else {
         document.getElementById('btn-login').style.display = 'inline-block';
         document.getElementById('btn-logout').style.display = 'none';
-        fetchGroup(); // Просто показываем список без возможности менять статус
+        if (sessionError) console.error("Ошибка сессии:", sessionError.message);
+        fetchGroup(); 
     }
 }
 
