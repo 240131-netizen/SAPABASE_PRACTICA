@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Монитор статусов группы | Демо-версия</title>
+    <title>Монитор статусов группы | Supabase</title>
     <style>
         * {
             margin: 0;
@@ -136,8 +136,13 @@
 
         .status-btn:hover {
             transform: translateY(-2px);
+            background: #ffffff;
             border-color: #2c7da0;
             box-shadow: 0 8px 18px rgba(44, 125, 160, 0.15);
+        }
+
+        .status-btn:active {
+            transform: translateY(1px);
         }
 
         .group-list {
@@ -162,17 +167,24 @@
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
         }
 
+        .user-item:hover {
+            background: #fafdff;
+            border-color: #bfd9e6;
+            transform: translateX(3px);
+        }
+
         .status-dot {
             width: 42px;
             height: 42px;
             border-radius: 50%;
+            background: #adb7c4;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 1.4rem;
             box-shadow: inset 0 1px 2px rgba(0,0,0,0.05), 0 2px 5px rgba(0,0,0,0.1);
-            flex-shrink: 0;
             transition: 0.1s;
+            flex-shrink: 0;
         }
 
         .user-info {
@@ -243,16 +255,6 @@
             padding-top: 1rem;
         }
 
-        .warning-banner {
-            background: #fef3c7;
-            border-left: 4px solid #f59e0b;
-            padding: 12px;
-            margin-bottom: 16px;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            color: #92400e;
-        }
-
         ::-webkit-scrollbar {
             width: 6px;
         }
@@ -277,28 +279,50 @@
                 font-size: 0.8rem;
             }
         }
+
+        .loading-skeleton {
+            background: #eef2f5;
+            border-radius: 1rem;
+            height: 70px;
+            margin-bottom: 10px;
+            animation: pulse 1.2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 0.8; }
+            100% { opacity: 0.5; }
+        }
+        .error-toast {
+            background: #fce4e4;
+            border-left: 5px solid #e53e3e;
+            padding: 0.6rem 1rem;
+            border-radius: 14px;
+            margin-bottom: 1rem;
+            font-size: 0.8rem;
+            color: #9b2c2c;
+        }
     </style>
 </head>
 <body>
 
 <div class="dashboard">
     <div class="profile-card">
-        <div class="warning-banner">
-            ⚠️ Демо-режим: данные локальные, для демонстрации функционала.<br>
-            🟢 Зелёная точка = пользователь онлайн (активность менее 2 минут)
-        </div>
-        
         <h2>📋 Мой профиль</h2>
         <div class="section-sub">Измени свой статус — группа увидит</div>
         
         <div id="myInfo" class="my-info-badge">
-            🔹 Вы зашли как: <strong>Алексей</strong>
+            Загрузка информации...
         </div>
         
         <div class="study-timer-card">
-            <div class="timer-label">📖 ВРЕМЯ В УЧЁБЕ (СЕГОДНЯ)</div>
+            <div class="timer-label">📖 ВРЕМЯ В УЧЁБЕ (ВСЕГО)</div>
             <div class="timer-value" id="studyTimeDisplay">0ч 0м</div>
             <div style="font-size: 0.7rem; color: #4b6a8b; margin-top: 4px;">⏱️ Таймер активен, пока статус "📚 Учусь"</div>
+        </div>
+        
+        <div id="auth-container" style="text-align: center; margin: 10px 0 5px;">
+            <button id="btn-login" style="padding: 10px 20px; border-radius: 40px; border: none; background: #2c7da0; color: white; font-weight: 600; cursor: pointer;">Войти через Google</button>
+            <button id="btn-logout" style="display:none; padding: 10px 20px; border-radius: 40px; border: 1px solid #cbdde9; background: white; cursor: pointer;">Выйти</button>
         </div>
         
         <div style="margin: 0.2rem 0 0.2rem 0; font-weight: 500; color: #2c4c6e;">⚡ Выбери состояние:</div>
@@ -309,7 +333,7 @@
             <button class="status-btn" data-status="🏠 Дома" data-color="#8b5cf6">🏠 Дома</button>
         </div>
         <div class="footer-note" style="margin-top: 1rem;">
-            💡 Статус обновляется мгновенно<br>🟢 Зелёная точка с пульсацией = онлайн
+            💡 Статус обновляется мгновенно<br>🟢 Зелёная точка = онлайн (активность < 2 мин)
         </div>
     </div>
 
@@ -318,99 +342,59 @@
         <div class="section-sub">🟢 Онлайн-статус + статус-текст (обновление 5 сек)</div>
         
         <div id="groupList" class="group-list">
-            <div style="text-align: center; padding: 20px;">Загрузка...</div>
+            <div class="loading-skeleton"></div>
+            <div class="loading-skeleton"></div>
         </div>
         <div class="footer-note">
-            🔄 Демо-режим | 🟢 Зелёный индикатор с пульсацией — пользователь в сети
+            🔄 Данные синхронизируются с сервером
         </div>
     </div>
 </div>
 
-<script>
-    // ========== ДЕМО-ДАННЫЕ ==========
-    
-    // Текущий пользователь
-    let MY_ID = 'demo_user_1';
-    
-    let currentUser = {
-        id: 'demo_user_1',
-        username: 'Алексей (Вы)',
-        status: '🏠 Дома',
-        color: '#8b5cf6',
-        last_seen: new Date().toISOString(),
-        study_seconds: 1250
-    };
-    
-    // Список всех пользователей группы
-    let demoUsers = [
-        {
-            id: 'demo_user_1',
-            username: 'Алексей (Вы)',
-            status: '🏠 Дома',
-            color: '#8b5cf6',
-            last_seen: new Date().toISOString(),
-            study_seconds: 1250
-        },
-        {
-            id: 'demo_user_2',
-            username: 'Мария',
-            status: '📚 Учусь',
-            color: '#3b82f6',
-            last_seen: new Date().toISOString(),
-            study_seconds: 3600
-        },
-        {
-            id: 'demo_user_3',
-            username: 'Дмитрий',
-            status: '☕ Кофе',
-            color: '#d97706',
-            last_seen: new Date(Date.now() - 10 * 1000).toISOString(),
-            study_seconds: 5400
-        },
-        {
-            id: 'demo_user_4',
-            username: 'Елена',
-            status: '🎮 В игре',
-            color: '#10b981',
-            last_seen: new Date(Date.now() - 30 * 1000).toISOString(),
-            study_seconds: 1800
-        },
-        {
-            id: 'demo_user_5',
-            username: 'Сергей',
-            status: '📚 Учусь',
-            color: '#3b82f6',
-            last_seen: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 минут назад - офлайн
-            study_seconds: 7200
-        }
-    ];
-    
-    // ========== ПЕРЕМЕННЫЕ ДЛЯ ТАЙМЕРА УЧЁБЫ ==========
-    let currentUserStatus = currentUser.status;
+<script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+    const URL = 'https://ofqryeutzazbmqwjfqzy.supabase.co';
+    const KEY = 'sb_publishable_5dStFrIg8TP9CJdmh2wICA_rBkWHYTz';
+    const supabase = createClient(URL, KEY);
+
+    let MY_ID = null;
+    let currentUserStatus = null;
     let studyStartTime = null;
-    let totalStudySeconds = currentUser.study_seconds;
+    let totalStudySeconds = 0;
     let studyTimerInterval = null;
-    
-    // ========== ФУНКЦИЯ ПРОВЕРКИ ОНЛАЙН ==========
-    // Онлайн если последняя активность была менее 2 минут назад
-    function isUserOnline(lastSeenStr) {
-        if (!lastSeenStr) return false;
-        const lastSeen = new Date(lastSeenStr);
-        const now = new Date();
-        const diffMs = now - lastSeen;
-        return diffMs < 2 * 60 * 1000; // 2 минуты = 120000 мс
+
+    // ========== СЧЁТЧИК ВРЕМЕНИ УЧЁБЫ ==========
+    async function loadStudySecondsFromDB() {
+        if (!MY_ID) return 0;
+        const { data, error } = await supabase
+            .from('profile')
+            .select('study_seconds')
+            .eq('id', MY_ID)
+            .single();
+        if (error || !data) {
+            console.warn("Не удалось загрузить study_seconds");
+            return 0;
+        }
+        return data.study_seconds || 0;
     }
-    
-    // ========== ФУНКЦИИ ТАЙМЕРА ==========
+
+    async function saveStudySecondsToDB(seconds) {
+        if (!MY_ID) return;
+        const { error } = await supabase
+            .from('profile')
+            .update({ study_seconds: Math.floor(seconds) })
+            .eq('id', MY_ID);
+        if (error) console.error("Ошибка сохранения времени учёбы:", error);
+    }
+
     function formatTime(seconds) {
         const hours = Math.floor(seconds / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
-        const secs = seconds % 60;
         if (hours > 0) return `${hours}ч ${mins}м`;
-        if (mins > 0) return `${mins}м ${secs}с`;
-        return `${secs}с`;
+        return `${mins}м`;
     }
-    
+
     function updateTimerDisplay() {
         const displayElem = document.getElementById('studyTimeDisplay');
         if (!displayElem) return;
@@ -421,39 +405,166 @@
         }
         displayElem.innerText = formatTime(currentTotal);
     }
-    
+
     function startStudyCounting() {
         if (studyTimerInterval) clearInterval(studyTimerInterval);
         studyTimerInterval = setInterval(() => {
             if (currentUserStatus === '📚 Учусь') {
                 updateTimerDisplay();
+                if (studyStartTime !== null) {
+                    const extra = Math.floor((Date.now() - studyStartTime) / 1000);
+                    const newTotal = totalStudySeconds + extra;
+                    saveStudySecondsToDB(newTotal);
+                }
             } else {
                 updateTimerDisplay();
             }
         }, 1000);
     }
-    
-    // ========== ОТРИСОВКА СПИСКА ГРУППЫ ==========
+
+    async function initStudyTimerForUser(statusText) {
+        if (!MY_ID) return;
+        totalStudySeconds = await loadStudySecondsFromDB();
+        currentUserStatus = statusText;
+        
+        if (statusText === '📚 Учусь' && studyStartTime === null) {
+            studyStartTime = Date.now();
+        } else if (statusText !== '📚 Учусь') {
+            if (studyStartTime !== null) {
+                const elapsed = Math.floor((Date.now() - studyStartTime) / 1000);
+                if (elapsed > 0) {
+                    totalStudySeconds += elapsed;
+                    await saveStudySecondsToDB(totalStudySeconds);
+                }
+                studyStartTime = null;
+            }
+        }
+        updateTimerDisplay();
+        if (!studyTimerInterval) startStudyCounting();
+    }
+
+    // ========== ОНЛАЙН-ИНДИКАТОР ==========
+    async function updateOnlineHeartbeat() {
+        if (!MY_ID) return;
+        const now = new Date().toISOString();
+        const { error } = await supabase
+            .from('profile')
+            .update({ last_seen: now })
+            .eq('id', MY_ID);
+        if (error) console.warn("Heartbeat error:", error);
+    }
+
+    function isUserOnline(lastSeenStr) {
+        if (!lastSeenStr) return false;
+        const lastSeen = new Date(lastSeenStr);
+        const now = new Date();
+        const diffMs = now - lastSeen;
+        return diffMs < 2 * 60 * 1000;
+    }
+
+    // ========== ИЗМЕНЕНИЕ СТАТУСА ==========
+    window.changeStatus = async (statusText, colorHex) => {
+        try {
+            if (!MY_ID) {
+                showTemporaryMessage("Сначала войдите через Google!", true);
+                return;
+            }
+            
+            // Останавливаем учёт времени если выходим из учёбы
+            if (currentUserStatus === '📚 Учусь' && statusText !== '📚 Учусь') {
+                if (studyStartTime !== null) {
+                    const elapsed = Math.floor((Date.now() - studyStartTime) / 1000);
+                    if (elapsed > 0) {
+                        totalStudySeconds += elapsed;
+                        await saveStudySecondsToDB(totalStudySeconds);
+                    }
+                    studyStartTime = null;
+                }
+            }
+            
+            const { error } = await supabase
+                .from('profile')
+                .update({ status: statusText, color: colorHex, last_seen: new Date().toISOString() })
+                .eq('id', MY_ID);
+
+            if (error) {
+                console.error("Ошибка обновления:", error);
+                showTemporaryMessage("Ошибка! Проверьте RLS политики.", true);
+                return;
+            }
+            
+            currentUserStatus = statusText;
+            
+            if (statusText === '📚 Учусь') {
+                if (studyStartTime === null) {
+                    studyStartTime = Date.now();
+                }
+                updateTimerDisplay();
+            }
+            
+            await fetchGroup();
+            showTemporaryMessage(`✅ Статус изменён на: ${statusText}`, false);
+        } catch (err) {
+            console.error("changeStatus error:", err);
+            showTemporaryMessage("Сетевая ошибка", true);
+        }
+    };
+
+    // ========== ЗАГРУЗКА ДАННЫХ ГРУППЫ ==========
+    async function fetchGroup() {
+        try {
+            const { data, error } = await supabase
+                .from('profile')
+                .select('*')
+                .order('username', { ascending: true });
+
+            if (error) {
+                console.error("Ошибка получения данных:", error);
+                const groupContainer = document.getElementById('groupList');
+                if(groupContainer) groupContainer.innerHTML = `<div class="error-toast">⚠️ Не удалось загрузить список.</div>`;
+                return;
+            }
+
+            renderGroupList(data);
+            
+            const currentUser = data.find(user => user.id === MY_ID);
+            if (currentUser) {
+                updateMyInfo(currentUser);
+                const dbStudySecs = currentUser.study_seconds || 0;
+                if (studyStartTime === null && Math.abs(totalStudySeconds - dbStudySecs) > 1) {
+                    totalStudySeconds = dbStudySecs;
+                    updateTimerDisplay();
+                }
+                if (currentUser.status !== currentUserStatus) {
+                    currentUserStatus = currentUser.status;
+                    if (currentUserStatus === '📚 Учусь' && studyStartTime === null) {
+                        studyStartTime = Date.now();
+                    } else if (currentUserStatus !== '📚 Учусь') {
+                        studyStartTime = null;
+                    }
+                    updateTimerDisplay();
+                }
+            }
+        } catch (err) {
+            console.error("fetchGroup ошибка:", err);
+        }
+    }
+
     function renderGroupList(users) {
         const container = document.getElementById('groupList');
         if (!container) return;
-        
-        if (!users || users.length === 0) {
-            container.innerHTML = '<div style="text-align: center; padding: 20px;">Нет пользователей</div>';
-            return;
-        }
         
         const html = users.map(user => {
             const statusText = user.status && user.status.trim() !== '' ? user.status : 'Статус не задан';
             const dotColor = user.color && user.color.startsWith('#') ? user.color : '#9aaebf';
             const online = isUserOnline(user.last_seen);
             
-            // Выбираем эмодзи для кружка
-            let statusEmoji = '💬';
+            let statusEmoji = '';
             if (statusText.includes('Учусь')) statusEmoji = '📖';
             else if (statusText.includes('Кофе')) statusEmoji = '☕';
             else if (statusText.includes('игре')) statusEmoji = '🎮';
             else if (statusText.includes('Дома')) statusEmoji = '🏠';
+            else statusEmoji = '💬';
             
             return `
                 <div class="user-item">
@@ -462,9 +573,9 @@
                     </div>
                     <div class="user-info">
                         <div class="user-name">
-                            ${escapeHtml(user.username)}
+                            ${escapeHtml(user.username || 'Без имени')}
                             ${user.id === MY_ID ? '<span class="online-badge">Вы</span>' : ''}
-                            ${online ? '<span class="online-indicator" title="Онлайн (активен менее 2 минут)"></span>' : '<span class="offline-indicator" title="Офлайн (не активен более 2 минут)"></span>'}
+                            ${online ? '<span class="online-indicator" title="Онлайн"></span>' : '<span class="offline-indicator" title="Офлайн"></span>'}
                         </div>
                         <div class="user-status-text">
                             ${escapeHtml(statusText)}
@@ -476,25 +587,30 @@
         
         container.innerHTML = html;
     }
-    
+
     function escapeHtml(str) {
         if (!str) return '';
-        return str.replace(/[&<>]/g, m => {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
+        return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
     }
-    
-    function updateMyInfo() {
+
+    function updateMyInfo(currentUser) {
         const myInfoDiv = document.getElementById('myInfo');
-        if (myInfoDiv) {
+        if (myInfoDiv && currentUser && currentUser.username) {
             myInfoDiv.innerHTML = `🔹 Вы зашли как: <strong>${escapeHtml(currentUser.username)}</strong>`;
         }
     }
-    
-    // ========== УВЕДОМЛЕНИЯ ==========
+
+    function bindStatusButtons() {
+        const buttons = document.querySelectorAll('.status-btn');
+        buttons.forEach(btn => {
+            btn.onclick = () => {
+                const statusText = btn.getAttribute('data-status');
+                const colorVal = btn.getAttribute('data-color');
+                changeStatus(statusText, colorVal);
+            };
+        });
+    }
+
     function showTemporaryMessage(msg, isError) {
         let toastDiv = document.getElementById('dynamicToast');
         if(!toastDiv) {
@@ -504,7 +620,6 @@
             document.body.appendChild(toastDiv);
         }
         toastDiv.style.background = isError ? "#c72a2a" : "#1f5e3a";
-        toastDiv.style.color = "white";
         toastDiv.textContent = msg;
         toastDiv.style.opacity = "1";
         if(window.toastHideTimeout) clearTimeout(window.toastHideTimeout);
@@ -512,139 +627,73 @@
             toastDiv.style.opacity = "0";
         }, 2500);
     }
-    
-    // ========== СМЕНА СТАТУСА ==========
-    function changeStatus(statusText, colorHex) {
-        // Логика таймера учёбы при смене статуса
-        if (currentUserStatus === '📚 Учусь' && statusText !== '📚 Учусь') {
-            // Останавливаем учёт времени
-            if (studyStartTime !== null) {
-                const elapsed = Math.floor((Date.now() - studyStartTime) / 1000);
-                if (elapsed > 0) {
-                    totalStudySeconds += elapsed;
-                }
-                studyStartTime = null;
-            }
-        }
-        
-        // Обновляем статус текущего пользователя
-        currentUser.status = statusText;
-        currentUser.color = colorHex;
-        currentUser.last_seen = new Date().toISOString(); // Обновляем время = онлайн
-        
-        // Обновляем в массиве пользователей
-        const userIndex = demoUsers.findIndex(u => u.id === MY_ID);
-        if (userIndex !== -1) {
-            demoUsers[userIndex].status = statusText;
-            demoUsers[userIndex].color = colorHex;
-            demoUsers[userIndex].last_seen = new Date().toISOString();
-        }
-        
-        currentUserStatus = statusText;
-        
-        // Если новый статус - учёба, запускаем таймер
-        if (statusText === '📚 Учусь') {
-            if (studyStartTime === null) {
-                studyStartTime = Date.now();
-            }
-        }
-        
-        updateTimerDisplay();
-        renderGroupList(demoUsers);
-        updateMyInfo();
-        showTemporaryMessage(`✅ Статус изменён на: ${statusText}`, false);
-    }
-    
-    // ========== HEARTBEAT (обновление времени активности) ==========
-    function updateOnlineHeartbeat() {
-        // Обновляем время текущего пользователя
-        currentUser.last_seen = new Date().toISOString();
-        const userIndex = demoUsers.findIndex(u => u.id === MY_ID);
-        if (userIndex !== -1) {
-            demoUsers[userIndex].last_seen = new Date().toISOString();
-        }
-        
-        // Для демонстрации: некоторые другие пользователи тоже остаются онлайн
-        // Мария (онлайн)
-        const mariaIndex = demoUsers.findIndex(u => u.id === 'demo_user_2');
-        if (mariaIndex !== -1) {
-            demoUsers[mariaIndex].last_seen = new Date().toISOString();
-        }
-        
-        // Дмитрий (онлайн)
-        const dmitryIndex = demoUsers.findIndex(u => u.id === 'demo_user_3');
-        if (dmitryIndex !== -1) {
-            demoUsers[dmitryIndex].last_seen = new Date().toISOString();
-        }
-        
-        // Елена (онлайн)
-        const elenaIndex = demoUsers.findIndex(u => u.id === 'demo_user_4');
-        if (elenaIndex !== -1) {
-            demoUsers[elenaIndex].last_seen = new Date().toISOString();
-        }
-        
-        // Сергей (оставляем офлайн - 5+ минут назад)
-        // Не обновляем его last_seen, чтобы он оставался офлайн
-        
-        renderGroupList(demoUsers);
-    }
-    
-    // ========== ПРИВЯЗКА КНОПОК ==========
-    function bindStatusButtons() {
-        const buttons = document.querySelectorAll('.status-btn');
-        buttons.forEach(btn => {
-            // Убираем старые обработчики
-            btn.removeEventListener('click', btn._handler);
-            // Создаём новый обработчик
-            const handler = () => {
-                const statusText = btn.getAttribute('data-status');
-                const colorVal = btn.getAttribute('data-color');
-                changeStatus(statusText, colorVal);
-            };
-            btn._handler = handler;
-            btn.addEventListener('click', handler);
+
+    // ========== АВТОРИЗАЦИЯ ==========
+    async function handleLogin() {
+        await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: window.location.origin + window.location.pathname }
         });
     }
     
-    // ========== ИНИЦИАЛИЗАЦИЯ ==========
-    function init() {
-        // Настраиваем таймер учёбы
-        if (currentUserStatus === '📚 Учусь') {
-            studyStartTime = Date.now();
+    async function handleLogout() {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.error("Ошибка при выходе:", error.message);
+        window.location.reload();
+    }
+
+    async function checkUser() {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (session) {
+            const user = session.user;
+            MY_ID = user.id;
+            
+            const { error: upsertError } = await supabase
+                .from('profile')
+                .upsert({
+                    id: MY_ID,
+                    username: user.user_metadata.full_name || user.email || 'User',
+                    study_seconds: 0,
+                    last_seen: new Date().toISOString(),
+                    status: '🏠 Дома',
+                    color: '#8b5cf6'
+                }, { onConflict: 'id' });
+            if (upsertError) console.error("Ошибка профиля:", upsertError);
+            
+            document.getElementById('btn-login').style.display = 'none';
+            document.getElementById('btn-logout').style.display = 'inline-block';
+            
+            const { data: profileData } = await supabase.from('profile').select('status, study_seconds').eq('id', MY_ID).single();
+            const dbStatus = profileData?.status || '🏠 Дома';
+            totalStudySeconds = profileData?.study_seconds || 0;
+            currentUserStatus = dbStatus;
+            
+            if (dbStatus === '📚 Учусь') {
+                studyStartTime = Date.now();
+            }
+            updateTimerDisplay();
+            startStudyCounting();
+            
+            await updateOnlineHeartbeat();
+            setInterval(async () => {
+                if (MY_ID) await updateOnlineHeartbeat();
+            }, 25000);
+            
+            await fetchGroup();
+            bindStatusButtons();
+            if (window.groupInterval) clearInterval(window.groupInterval);
+            window.groupInterval = setInterval(fetchGroup, 5000);
+        } else {
+            document.getElementById('btn-login').style.display = 'inline-block';
+            document.getElementById('btn-logout').style.display = 'none';
+            fetchGroup();
         }
-        
-        totalStudySeconds = currentUser.study_seconds;
-        updateTimerDisplay();
-        startStudyCounting();
-        
-        // Убеждаемся, что у текущего пользователя свежее время
-        currentUser.last_seen = new Date().toISOString();
-        const userIndex = demoUsers.findIndex(u => u.id === MY_ID);
-        if (userIndex !== -1) {
-            demoUsers[userIndex].last_seen = new Date().toISOString();
-        }
-        
-        // Отрисовываем список
-        renderGroupList(demoUsers);
-        bindStatusButtons();
-        updateMyInfo();
-        
-        // Для отладки
-        console.log('Инициализация завершена');
-        console.log('Текущий пользователь онлайн:', isUserOnline(currentUser.last_seen));
-        console.log('Время last_seen:', currentUser.last_seen);
-        
-        // Heartbeat каждые 25 секунд (поддерживаем онлайн-статус)
-        setInterval(updateOnlineHeartbeat, 25000);
-        
-        // Обновление списка каждые 5 секунд (для синхронизации)
-        setInterval(() => {
-            renderGroupList(demoUsers);
-        }, 5000);
     }
     
-    // Запускаем при загрузке страницы
-    init();
+    document.getElementById('btn-login').onclick = handleLogin;
+    document.getElementById('btn-logout').onclick = handleLogout;
+    
+    checkUser();
 </script>
 </body>
 </html>
